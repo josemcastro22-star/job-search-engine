@@ -1,1 +1,51 @@
+name: Scheduled job search
 
+on:
+  schedule:
+    # Weekdays at 8:00am ET while we're on daylight savings (EDT = UTC-4)
+    # GitHub schedules run in UTC.
+    - cron: "0 12 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run-search:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run job search
+        env:
+          ADZUNA_APP_ID: $ secrets.ADZUNA_APP_ID 
+          ADZUNA_APP_KEY: $ secrets.ADZUNA_APP_KEY 
+        run: |
+          python search.py
+
+      - name: Commit updated files (jobs.csv + seen_jobs.json)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add jobs.csv seen_jobs.json || true
+
+          # Only commit if there are changes
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update job search results"
+          git push
